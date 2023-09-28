@@ -19,7 +19,8 @@ class CODE(Enum):
 CODE.IGNORE.label = 'Fx'
 CODE.UNMETHYLATED.label = 'U'
 CODE.METHYLATED.label = 'M'
-CODE.DELETION.label = 'D/d'
+CODE.DELETION.label1 = 'D'
+CODE.DELETION.label2 = 'd'
 CODE.A_REPLACE.label = 'A'
 CODE.T_REPLACE.label = 'T'
 CODE.C_REPLACE.label = 'C'
@@ -33,7 +34,7 @@ CODE.G_INSERT.label = 'g'
 CODE.UNKNOWN_INSERT.label = 'i'
 
 CPG_DICT = {CODE.UNMETHYLATED.label: CODE.UNMETHYLATED.value, CODE.METHYLATED.label: CODE.METHYLATED.value}
-SNP_DICT = {CODE.DELETION.label[0]: CODE.DELETION.value, CODE.DELETION.label[1]: CODE.DELETION.value,
+SNP_DICT = {CODE.DELETION.label1: CODE.DELETION.value, CODE.DELETION.label2: CODE.DELETION.value,
             CODE.A_REPLACE.label: CODE.A_REPLACE.value, CODE.T_REPLACE.label: CODE.T_REPLACE.value,
             CODE.C_REPLACE.label: CODE.C_REPLACE.value, CODE.G_REPLACE.label: CODE.G_REPLACE.value,
             CODE.AorG_REPLACE.label: CODE.AorG_REPLACE.value, CODE.CorT_REPLACE.label: CODE.CorT_REPLACE.value,
