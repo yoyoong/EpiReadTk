@@ -5,7 +5,7 @@ from common.Region import Region
 from common.CpGFile import CpGFile
 from common.EpibedFile import EpibedFile
 from common.FastaFile import FastaFile
-from common.Constant import CODE, CPG_DICT, SNP_DICT, SNP_REPLACE_DICT, SNP_DETELE_DICT, SNP_INSERT_DICT
+from common.Constant import CODE, CPG_DICT, SNP_DICT, SNP_DICT_INV, SNP_INSERT_DICT
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -97,32 +97,7 @@ class Tanghulu:
 
                 # draw snp information
                 if status in SNP_DICT.values():
-                    marker = ''
-                    if status == CODE.DELETION.value:
-                        marker = CODE.DELETION.label1
-                    elif status == CODE.A_REPLACE.value:
-                        marker = CODE.A_REPLACE.label
-                    elif status == CODE.T_REPLACE.value:
-                        marker = CODE.T_REPLACE.label
-                    elif status == CODE.C_REPLACE.value:
-                        marker = CODE.C_REPLACE.label
-                    elif status == CODE.G_REPLACE.value:
-                        marker = CODE.G_REPLACE.label
-                    elif status == CODE.AorG_REPLACE.value:
-                        marker = CODE.AorG_REPLACE.label
-                    elif status == CODE.CorT_REPLACE.value:
-                        marker = CODE.CorT_REPLACE.label
-                    elif status == CODE.A_INSERT.value:
-                        marker = CODE.A_INSERT.label
-                    elif status == CODE.T_INSERT.value:
-                        marker = CODE.T_INSERT.label
-                    elif status == CODE.C_INSERT.value:
-                        marker = CODE.C_INSERT.label
-                    elif status == CODE.G_INSERT.value:
-                        marker = CODE.G_INSERT.label
-                    elif status == CODE.UNKNOWN_INSERT.value:
-                        marker = CODE.UNKNOWN_INSERT.label
-
+                    marker = SNP_DICT_INV[status]
                     ax.scatter([draw_pos[j]], [y_pos], c=color, marker=f"${marker}$", s=100, zorder=3)
 
                     # draw reference base information
