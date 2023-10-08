@@ -1,7 +1,7 @@
 import os
 import tabix
 from common import Region
-from common.Constant import CPG_DICT, SNP_DICT
+from common.Constant import CPG_DICT, SNP_DICT, SNP_DETELE_DICT, SNP_INSERT_DICT
 import itertools
 import numpy as np
 
@@ -13,7 +13,7 @@ class EpibedFile:
         self.epibed_tabix = tabix.open(epibedPath)
 
     def query_by_region(self, region: Region):
-        '''Query epibed file to by region.
+        '''Query epibed file by region.
         Return:
             epibed_info: a dictionary which key is read name and value is a list include 1 or 2(usually) epibed line.
         '''
@@ -57,34 +57,47 @@ class EpibedFile:
                 cpg_info = self.separate_rle_string(line[6])
                 snp_info = self.separate_rle_string(line[8])
 
-                cpg_move_length = 0
+                move_length = 0
+                insert_length = 0
+                delete_length = 0
                 for i in range(len(cpg_info)):
                     if cpg_info[i].isalpha():
                         if cpg_info[i] in CPG_DICT.keys():
                             if strand == "+": # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
-                                self.cpg_snp_position.add(start_pos + cpg_move_length)
+                                self.cpg_snp_position.add(start_pos + move_length - insert_length + delete_length)
                             else: # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
-                                self.cpg_snp_position.add(start_pos + cpg_move_length - 1)
+                                self.cpg_snp_position.add(start_pos + move_length - insert_length + delete_length - 1)
+                        if cpg_info[i] in SNP_INSERT_DICT.keys():
+                            insert_length += 1
+                        if cpg_info[i] in SNP_DETELE_DICT.keys():
+                            delete_length += 1
 
                         if i + 1 < len(cpg_info) and cpg_info[i + 1].isdigit():
-                            cpg_move_length += int(cpg_info[i + 1])
+                            move_length += int(cpg_info[i + 1])
                         else:
-                            cpg_move_length += 1
+                            move_length += 1
 
-                snp_move_length = 0
+                move_length = 0
+                insert_length = 0
+                delete_length = 0
                 for i in range(len(snp_info)):
                     if snp_info[i].isalpha():
                         if snp_info[i] in SNP_DICT.keys():
-                            self.cpg_snp_position.add(start_pos + snp_move_length)
+                            self.cpg_snp_position.add(start_pos + move_length - insert_length + delete_length)
+
+                        if snp_info[i] in SNP_INSERT_DICT.keys():
+                            insert_length += 1
+                        if snp_info[i] in SNP_DETELE_DICT.keys():
+                            delete_length += 1
 
                         if i + 1 < len(snp_info) and snp_info[i + 1].isdigit():
-                            snp_move_length += int(snp_info[i + 1])
+                            move_length += int(snp_info[i + 1])
                         else:
-                            snp_move_length += 1
+                            move_length += 1
                             # if strand == "+":
-                            #     self.cpg_snp_position.add(start_pos if i == 0 else start_pos + snp_move_length)
+                            #     self.cpg_snp_position.add(start_pos if i == 0 else start_pos + move_length)
                             # else:
-                            #     self.cpg_snp_position.add(start_pos if i == 0 else start_pos + snp_move_length - 1)
+                            #     self.cpg_snp_position.add(start_pos if i == 0 else start_pos + move_length - 1)
 
         self.cpg_snp_position = list(sorted(self.cpg_snp_position))
         return self.cpg_snp_position
@@ -117,34 +130,47 @@ class EpibedFile:
                 cpg_info = self.separate_rle_string(line[6])
                 snp_info = self.separate_rle_string(line[8])
 
-                cpg_move_length = 0
+                move_length = 0
+                insert_length = 0
+                delete_length = 0
                 for i in range(len(cpg_info)):
                     if cpg_info[i].isalpha():
                         if cpg_info[i] in CPG_DICT.keys():
                             if strand == "+":  # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
-                                position = start_pos + cpg_move_length
+                                position = start_pos + move_length - insert_length + delete_length
                             else:  # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
-                                position = start_pos + cpg_move_length - 1
+                                position = start_pos + move_length - insert_length + delete_length - 1
                             col = self.cpg_snp_position.index(position)
                             self.cpg_snp_matrix[row][col] = CPG_DICT[cpg_info[i]]
+                        if cpg_info[i] in SNP_INSERT_DICT.keys():
+                            insert_length += 1
+                        if cpg_info[i] in SNP_DETELE_DICT.keys():
+                            delete_length += 1
 
                         if i + 1 < len(cpg_info) and cpg_info[i + 1].isdigit():
-                            cpg_move_length += int(cpg_info[i + 1])
+                            move_length += int(cpg_info[i + 1])
                         else:
-                            cpg_move_length += 1
+                            move_length += 1
 
-                snp_move_length = 0
+                move_length = 0
+                insert_length = 0
+                delete_length = 0
                 for i in range(len(snp_info)):
                     if snp_info[i].isalpha():
                         if snp_info[i] in SNP_DICT.keys():
-                            position = start_pos + snp_move_length
+                            position = start_pos + move_length - insert_length + delete_length
                             col = self.cpg_snp_position.index(position)
                             self.cpg_snp_matrix[row][col] = SNP_DICT[snp_info[i]]
 
+                        if snp_info[i] in SNP_INSERT_DICT.keys():
+                            insert_length += 1
+                        if snp_info[i] in SNP_DETELE_DICT.keys():
+                            delete_length += 1
+
                         if i + 1 < len(snp_info) and snp_info[i + 1].isdigit():
-                            snp_move_length += int(snp_info[i + 1])
+                            move_length += int(snp_info[i + 1])
                         else:
-                            snp_move_length += 1
+                            move_length += 1
             self.strand_list.append(strand)
             row += 1
 
