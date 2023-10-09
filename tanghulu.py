@@ -43,7 +43,7 @@ class Tanghulu:
         plt.clf()
         fig = plt.figure()
         fig_width = pos_num + 5 if pos_num > 5 else 10
-        fig_height = read_num + 2 if read_num > 5 else 7
+        fig_height = read_num * 0.8 + 3 if read_num > 5 else 7
         fig.set_size_inches(fig_width, fig_height)
 
         # x-axis
@@ -54,10 +54,10 @@ class Tanghulu:
                 ax.scatter(pos, [0], c="#c0c0c0", s=100, zorder=3)
             ax.text(pos, -0.5, ref_pos[pos], rotation=45, ha='center', rotation_mode='anchor', color="grey", zorder=2)
         plt.xticks([])
-        plt.xlabel(xlabel='Genomic position', fontdict={'fontsize': fig_width})
+        plt.xlabel(xlabel='Genomic position', fontdict={'fontsize': fig_width * 0.8 if fig_width > 15 else 12})
 
         # y-axis
-        plt.yticks(range(read_num + 1), size = fig_width * 0.75 if fig_width > 20 else 15)
+        plt.yticks(range(read_num + 1), size = fig_width * 0.5 if fig_width > 20 else 10)
 
         # tanghulu
         y_pos = 1
@@ -109,7 +109,8 @@ class Tanghulu:
             y_pos += 1
 
         # title
-        ax.set_title(f'{self.region.format_string} ({self.epibedFile.epibed_name})', fontdict = {'fontsize': fig_width * 1.5})
+        ax.set_title(f'{self.region.format_string} ({self.epibedFile.epibed_name})',
+                     fontdict = {'fontsize': fig_width if fig_width > 15 else 15}, pad=fig_width)
 
         # legend
         ax.axis(ymin=(-1))
