@@ -8,10 +8,18 @@ class HelpMessage():
     cpgPath = "genomic CpG file, gz format and Indexed"
     fastaPath = "input fasta/fastq file, .fasta/.fastq/.fa format and indexed"
     region = "one region, in the format of chr:start-end"
+    bedPath = "a bed file, one query region per line"
     outputDir = "output directory name"
     tag = "prefix of the output file(s)"
     outFormat = "output format, pdf or png [pdf]"
     outcut = "the max length of region to plot [2000]"
+    metrics = "mHap-level metrics, including MM, PDR, CHALM, MHL, MCR, MBS, Entropy and R2 [None]"
+    minK = "minimum k-mer length for MHL [1]"
+    maxK = "maximum k-mer length for MHL [10]"
+    K = "k-mer length for entropy, PDR, and CHALM, can be 3, 4, or 5 [4]"
+    cutReads = "indicates whether only keep CpGs in the defined region"
+    strand = "plus,minus,both [both]"
+    r2Cov = "minimal number of reads that cover two CpGs for R2 calculation [20]"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -28,6 +36,23 @@ if __name__ == '__main__':
     tanghulu_parser.add_argument('--outFormat', type=str, required=False, default='pdf', help=help.outFormat)
     tanghulu_parser.add_argument('--outcut', type=int, default=2000, help=help.outcut)
     tanghulu_parser.set_defaults(func='tanghulu')
+
+    summaryBySNP_parser = subparsers.add_parser('summaryBySNP', help="summaryBySNP")
+    summaryBySNP_parser.add_argument('--epibedPath', type=str, required=True, help=help.epibedPath)
+    summaryBySNP_parser.add_argument('--cpgPath', type=str, required=True, help=help.cpgPath)
+    summaryBySNP_parser.add_argument('--fastaPath', type=str, required=True, help=help.fastaPath)
+    summaryBySNP_parser.add_argument('--region', type=str, required=False, help=help.region)
+    summaryBySNP_parser.add_argument('--bedPath', type=str, required=False, help=help.bedPath)
+    summaryBySNP_parser.add_argument('--outputDir', type=str, required=True, help=help.outputDir)
+    summaryBySNP_parser.add_argument('--tag', type=str, required=True, help=help.tag + " [summaryBySNP]")
+    summaryBySNP_parser.add_argument('--metrics', type=str, required=False, help=help.metrics)
+    summaryBySNP_parser.add_argument('--minK', type=int, required=False, default='1', help=help.minK)
+    summaryBySNP_parser.add_argument('--maxK', type=int, required=False, default='10', help=help.maxK)
+    summaryBySNP_parser.add_argument('--K', type=int, required=False, default='4', help=help.K)
+    summaryBySNP_parser.add_argument('--cutReads', required=False, action='store_true', help=help.cutReads)
+    summaryBySNP_parser.add_argument('--strand', type=str, required=False, default='both', help=help.strand)
+    summaryBySNP_parser.add_argument('--r2Cov', type=int, required=False, default='20', help=help.r2Cov)
+    summaryBySNP_parser.set_defaults(func='summaryBySNP')
 
     args = parser.parse_args()
     try:

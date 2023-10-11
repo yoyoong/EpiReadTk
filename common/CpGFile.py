@@ -2,7 +2,7 @@ import tabix
 from common import Region
 
 class CpGFile:
-    def __init__(self, cpgPath: str, shift: int):
+    def __init__(self, cpgPath: str, shift = 0):
         self.cpg_path = cpgPath
         self.shift = shift
         self.cpg_tabix = tabix.open(cpgPath)

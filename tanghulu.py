@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from common.Dict import Dict
+from common.Namespace import Namespace
 from common.Region import Region
 from common.CpGFile import CpGFile
 from common.EpibedFile import EpibedFile
@@ -17,7 +17,7 @@ class Tanghulu:
         self.epibedFile = EpibedFile(args.epibedPath)
         self.cpgFile = CpGFile(args.cpgPath, SHIFT)
         self.fastaFile = FastaFile(args.fastaPath)
-        self.region = Region(args.region, 0)
+        self.region = Region(args.region)
         self.outputDir = args.outputDir
         self.tag = args.tag
         self.outFormat = args.outFormat
@@ -140,13 +140,13 @@ def main(args):
     print("Run tanghulu end!")
 
 if __name__ == '__main__':
-    args = Dict()
-    args["epibedPath"] = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRX1631736.epibed.gz"
-    args["cpgPath"] = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
-    args["fastaPath"] = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    args["region"] = "chr1:230177036-230178827"
-    args["outputDir"] = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
-    args["tag"] = "tanghulu.test"
-    args["outFormat"] = "png"
-    args["outcut"] = 2000
+    args = Namespace()
+    args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRX1631736.epibed.gz"
+    args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
+    args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
+    args.region = "chr1:230177036-230178500"
+    args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
+    args.tag = "tanghulu.test"
+    args.outFormat = "png"
+    args.outcut = 2000
     main(args)
