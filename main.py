@@ -16,9 +16,11 @@ class HelpMessage():
     metrics = "mHap-level metrics, including MM, PDR, CHALM, MHL, MCR, MBS, Entropy and R2 [None]"
     minK = "minimum k-mer length for MHL [1]"
     maxK = "maximum k-mer length for MHL [10]"
-    K = "k-mer length for entropy, PDR, and CHALM, can be 3, 4, or 5 [4]"
+    K = "k-mer length for Entropy, PDR, and CHALM, can be 3, 4, or 5 [4]"
     cutReads = "indicates whether only keep CpGs in the defined region"
     strand = "plus,minus,both [both]"
+    k4Plus = "minimal number of reads that cover 4 or more CpGs for PDR, CHALM, MHL, MBS and Entropy [5]"
+    cpgCov = "minimal number of CpG coverage for MM and MCR calculation [5]"
     r2Cov = "minimal number of reads that cover two CpGs for R2 calculation [20]"
 
 if __name__ == '__main__':
@@ -51,6 +53,8 @@ if __name__ == '__main__':
     summaryBySNP_parser.add_argument('--K', type=int, required=False, default='4', help=help.K)
     summaryBySNP_parser.add_argument('--cutReads', required=False, action='store_true', help=help.cutReads)
     summaryBySNP_parser.add_argument('--strand', type=str, required=False, default='both', help=help.strand)
+    summaryBySNP_parser.add_argument('--k4Plus', type=int, required=False, default='5', help=help.k4Plus)
+    summaryBySNP_parser.add_argument('--cpgCov', type=int, required=False, default='5', help=help.cpgCov)
     summaryBySNP_parser.add_argument('--r2Cov', type=int, required=False, default='20', help=help.r2Cov)
     summaryBySNP_parser.set_defaults(func='summaryBySNP')
 

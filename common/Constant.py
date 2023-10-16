@@ -2,20 +2,20 @@ from enum import Enum
 
 class CODE(Enum):
     IGNORE= 0
-    UNMETHYLATED = 10
-    METHYLATED = 11
+    UNMETHYLATED = 1
+    METHYLATED = 2
     DELETION = -1
-    A_REPLACE = 21
-    T_REPLACE = 22
-    C_REPLACE = 23
-    G_REPLACE = 24
-    AorG_REPLACE = 25
-    CorT_REPLACE = 26
-    A_INSERT = 31
-    T_INSERT = 32
-    C_INSERT = 33
-    G_INSERT = 34
-    UNKNOWN_INSERT = 35
+    A_REPLACE = 11
+    T_REPLACE = 12
+    C_REPLACE = 13
+    G_REPLACE = 14
+    AorG_REPLACE = 15
+    CorT_REPLACE = 16
+    A_INSERT = 21
+    T_INSERT = 22
+    C_INSERT = 23
+    G_INSERT = 24
+    UNKNOWN_INSERT = 25
 CODE.IGNORE.label = 'Fx'
 CODE.UNMETHYLATED.label = 'U'
 CODE.METHYLATED.label = 'M'

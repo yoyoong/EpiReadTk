@@ -54,10 +54,12 @@ class Tanghulu:
                 ax.scatter(pos, [0], c="#c0c0c0", s=100, zorder=3)
             ax.text(pos, -0.5, ref_pos[pos], rotation=45, ha='center', rotation_mode='anchor', color="grey", zorder=2)
         plt.xticks([])
-        plt.xlabel(xlabel='Genomic position', fontdict={'fontsize': fig_width * 0.8 if fig_width > 15 else 12})
+        xlabel_size = min(max(fig_width * 0.8, 12), 50)
+        plt.xlabel(xlabel='Genomic position', fontdict={'fontsize': xlabel_size})
 
         # y-axis
-        plt.yticks(range(read_num + 1), size = fig_width * 0.5 if fig_width > 20 else 10)
+        yticks_size = min(max(fig_width * 0.5, 10), 30)
+        plt.yticks(range(read_num + 1), size = yticks_size)
 
         # tanghulu
         y_pos = 1
@@ -109,8 +111,8 @@ class Tanghulu:
             y_pos += 1
 
         # title
-        ax.set_title(f'{self.region.format_string} ({self.epibedFile.epibed_name})',
-                     fontdict = {'fontsize': fig_width if fig_width > 15 else 15}, pad=fig_width)
+        title_size = min(max(fig_width, 15), 100)
+        ax.set_title(f'{self.region.format_string} ({self.epibedFile.epibed_name})', fontdict = {'fontsize': title_size}, pad=fig_width)
 
         # legend
         ax.axis(ymin=(-1))
@@ -144,7 +146,7 @@ if __name__ == '__main__':
     args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRX1631736.epibed.gz"
     args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
     args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    args.region = "chr1:230177036-230178500"
+    args.region = "chr1:546494-547092"
     args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
     args.tag = "tanghulu.test"
     args.outFormat = "png"
