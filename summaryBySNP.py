@@ -11,7 +11,10 @@ from common.OutputFile import OutputFile
 from common.Util import calculate_MHL, calculate_MBS, calculate_Entropy, calculate_R2
 import numpy as np
 import pandas as pd
+from scipy.sparse import coo_matrix, find
 import datetime
+import gzip
+from tqdm.autonotebook import tqdm
 
 SHIFT = 500
 
@@ -50,45 +53,52 @@ class SummaryBySNP:
     def summary_by_region(self, region):
         self.epibed_info = self.epibedFile.query_by_region(region)
         self.cpg_snp_position = self.epibedFile.get_cpg_snp_position()
-        self.cpg_snp_matrix, self.strand_list = self.epibedFile.build_cpg_snp_matrix()
+        self.cpg_snp_matrix, self.strand_list = self.epibedFile.build_sparse_cpg_snp_matrix()
         cpg_pos_list = self.cpgFile.query_by_region(self.region)
-        pos_num = self.cpg_snp_matrix.shape[0]
-        read_num = self.cpg_snp_matrix.shape[1]
 
         # get the position has and only has 2 kind ATCG replacement snp
-        atcg_replace_mask = np.isin(self.cpg_snp_matrix, list(SNP_REPLACE_ATCG_DICT.values()))
-        atcg_replace_matrix = self.cpg_snp_matrix * atcg_replace_mask
-        position_atcg_replace_info = [np.unique(col[col != 0]) for col in atcg_replace_matrix.T]
-        # insert和delete是否要处理？
+        cpg_snp_matrix_row, cpg_snp_matrix_col, cpg_snp_matrix_data = find(self.cpg_snp_matrix)
+        atcg_mask = (cpg_snp_matrix_data <= CODE.G_REPLACE.value) & (cpg_snp_matrix_data >= CODE.A_REPLACE.value)
+        atcg_replace_matrix = coo_matrix(
+            (cpg_snp_matrix_data[atcg_mask], (cpg_snp_matrix_row[atcg_mask], cpg_snp_matrix_col[atcg_mask])),
+            shape=self.cpg_snp_matrix.shape)
+        nonzero_row, nonzero_col = atcg_replace_matrix.nonzero()
+        atcg_replace_index = np.unique(nonzero_col)
+        # insert和delete暂不处理
 
         # cpg information dictionatry grouped by ATCG replacement and indexed position
         pos_snp_cpg_dict = dict()
-        for i in range(len(position_atcg_replace_info)):
-            if len(position_atcg_replace_info[i]) == 2:
+        cpg_mask = (cpg_snp_matrix_data == CODE.UNMETHYLATED.value) | (cpg_snp_matrix_data == CODE.METHYLATED.value)
+        cpg_info_matrix = coo_matrix(
+            (cpg_snp_matrix_data[cpg_mask], (cpg_snp_matrix_row[cpg_mask], cpg_snp_matrix_col[cpg_mask])),
+            shape=self.cpg_snp_matrix.shape)
+        for i in tqdm(atcg_replace_index, desc='Get cpg info'):
+            atcg_replace_info = atcg_replace_matrix.getcol(i)
+            if len(np.unique(atcg_replace_info.data)) == 2:
                 snp_cpg_dict = dict()
-                for snp_code in position_atcg_replace_info[i]:
-                    # if position in cpg_pos_list: # 如果即是cpg位点也是snp位点，该位点的cpg信息是忽略还是作为未甲基化处理？
-                    cpg_mask = np.isin(self.cpg_snp_matrix, list(CPG_DICT.values()))
-                    cpg_info = (self.cpg_snp_matrix * cpg_mask)[self.cpg_snp_matrix.T[i] == snp_code, :]
+                for snp_code in atcg_replace_info.data:
+                    # if position in cpg_pos_list: # 如果即是cpg位点也是snp位点，该位点的cpg信息忽略
+                    cpg_info_index = self.cpg_snp_matrix.getcol(i).multiply(self.cpg_snp_matrix.getcol(i) == snp_code).nonzero()[0]
+                    cpg_info = cpg_info_matrix.todense()[cpg_info_index]
                     if not np.all(cpg_info == 0):
                         snp_cpg_dict[snp_code] = cpg_info
 
                 position = self.cpg_snp_position[i]
                 if len(snp_cpg_dict) == 2:
                     pos_snp_cpg_dict[position] = snp_cpg_dict
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + " 4!")
 
         output_file = OutputFile(os.path.join(self.outputDir, self.tag + ".txt"))
         head_base_list = ["chrom", "pos", "refer", "real", "nReads", "mBase", "cBase", "tBase", "K4plus", "nDR", "nMR"]
         metrics_list = self.metrics.split(" ")
         column_list = head_base_list + metrics_list
         output_file.write_head(column_list)
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "start!")
-        for pos, snp_cpg_dict in sorted(pos_snp_cpg_dict.items()):
+        for pos, snp_cpg_dict in tqdm(sorted(pos_snp_cpg_dict.items()), desc='Calculate'):
             for snp_code, cpg_info in sorted(snp_cpg_dict.items()):
                 line_str = self.calculate_by_site(pos, snp_code, cpg_info, metrics_list)
                 output_file.write_line(line_str)
 
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + "end!")
+        # print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + " 5!")
 
     def calculate_by_site(self, site_pos:str, snp_code:int, cpg_info: np.ndarray, metrics_list:list):
         chrom = self.region.chr
@@ -165,6 +175,9 @@ class SummaryBySNP:
 
         return line_str.rstrip() + '\n'
 
+    def calculate_all(self, ):
+        cpg_matrix = pd.read_csv(self.cpg_path, sep='\t', header=None).iloc[:, :2]
+
 
 def main(args):
     print("Run summaryBySNP start!")
@@ -172,14 +185,14 @@ def main(args):
     summaryBySNP.check_args()
 
     # get region list from input args
-    region_list = list()
-    if summaryBySNP.bedFile is not None:
+    if summaryBySNP.region is not None:
+        summaryBySNP.summary_by_region(summaryBySNP.region)
+    elif summaryBySNP.bedFile is not None:
         region_list = summaryBySNP.bedFile.get_region_list()
+        for region in region_list:
+            summaryBySNP.summary_by_region(region)
     else:
-        region_list.append(summaryBySNP.region)
-
-    for region in region_list:
-        summaryBySNP.summary_by_region(region)
+        summaryBySNP.calculate_all()
 
     print("Run summaryBySNP end!")
 
@@ -189,18 +202,18 @@ if __name__ == '__main__':
     args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRX1631736.epibed.gz"
     args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
     args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    args.region = "chr1:725026-726081"
+    args.region = "chr1:923100-10924200"
     # args.bedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/bed_file/test.bed"
     args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
     args.tag = "summaryBySNP.test"
-    # args.metrics = "MM PDR CHALM MHL MCR MBS Entropy R2"
-    args.metrics = "Entropy"
+    args.metrics = "MM PDR CHALM MHL MCR MBS Entropy"
+    # args.metrics = "Entropy"
     args.minK = 1
     args.maxK = 10
-    args.K = 2
+    args.K = 4
     args.cutReads = True
     args.strand = "both"
-    args.k4Plus = 1
+    args.k4Plus = 4
     args.cpgCov = 1
-    args.r2Cov = 20
+    args.r2Cov = 1
     main(args)
