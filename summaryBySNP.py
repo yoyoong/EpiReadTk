@@ -6,7 +6,7 @@ from common.CpGFile import CpGFile
 from common.EpibedFile import EpibedFile
 from common.FastaFile import FastaFile
 from common.BedFile import BedFile
-from common.Constant import CODE, CPG_DICT, SNP_DICT, SNP_DICT_INV, SNP_REPLACE_ATCG_DICT
+from common.Constant import CODE, CPG_DICT, SNP_DICT, SNP_DICT_INV, SNP_INSERT_DICT, SNP_REPLACE_ATCG_DICT
 from common.OutputFile import OutputFile
 from common.Util import calculate_MHL, calculate_MBS, calculate_Entropy, calculate_R2
 import numpy as np
@@ -15,6 +15,7 @@ from scipy.sparse import coo_matrix, find
 import datetime
 import gzip
 from tqdm.autonotebook import tqdm
+import itertools
 
 SHIFT = 500
 
@@ -46,25 +47,26 @@ class SummaryBySNP:
         assert 1 <= self.maxK <= 10, 'maxK should be in 1 to 10'
         assert self.maxK > self.minK, 'maxK should be larger than minK'
         # assert 3 <= self.K <= 5, 'K：the default is 4 and values must be between 3 and 5'
-        assert self.region or self.bedFile, 'you should input bedPath or region'
+        # assert self.region or self.bedFile, 'you should input bedPath or region'
         assert (not self.region) or (not self.bedFile), 'you should only input bedPath or region'
         assert self.strand == 'both' or self.strand == 'plus' or self.strand == 'minus', 'strand should be both, plus or minus'
 
     def summary_by_region(self, region):
         self.epibed_info = self.epibedFile.query_by_region(region)
         self.cpg_snp_position = self.epibedFile.get_cpg_snp_position()
-        self.cpg_snp_matrix, self.strand_list = self.epibedFile.build_sparse_cpg_snp_matrix()
-        cpg_pos_list = self.cpgFile.query_by_region(self.region)
+        self.cpg_snp_matrix = self.epibedFile.build_sparse_cpg_snp_matrix()
+        # cpg_pos_list = self.cpgFile.query_by_region(self.region)
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + " 2!")
 
-        # get the position has and only has 2 kind ATCG replacement snp
+        # get the position has ATCG replacement snp
         cpg_snp_matrix_row, cpg_snp_matrix_col, cpg_snp_matrix_data = find(self.cpg_snp_matrix)
         atcg_mask = (cpg_snp_matrix_data <= CODE.G_REPLACE.value) & (cpg_snp_matrix_data >= CODE.A_REPLACE.value)
         atcg_replace_matrix = coo_matrix(
             (cpg_snp_matrix_data[atcg_mask], (cpg_snp_matrix_row[atcg_mask], cpg_snp_matrix_col[atcg_mask])),
             shape=self.cpg_snp_matrix.shape)
-        nonzero_row, nonzero_col = atcg_replace_matrix.nonzero()
-        atcg_replace_index = np.unique(nonzero_col)
+        atcg_replace_cols = np.unique(atcg_replace_matrix.nonzero()[1]) # column index include ATCG replacement
         # insert和delete暂不处理
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + " 3!")
 
         # cpg information dictionatry grouped by ATCG replacement and indexed position
         pos_snp_cpg_dict = dict()
@@ -72,21 +74,23 @@ class SummaryBySNP:
         cpg_info_matrix = coo_matrix(
             (cpg_snp_matrix_data[cpg_mask], (cpg_snp_matrix_row[cpg_mask], cpg_snp_matrix_col[cpg_mask])),
             shape=self.cpg_snp_matrix.shape)
-        for i in tqdm(atcg_replace_index, desc='Get cpg info'):
+        cpg_info_matrix = cpg_info_matrix.todense()
+        for i in tqdm(atcg_replace_cols, desc='Get cpg info'):
             atcg_replace_info = atcg_replace_matrix.getcol(i)
             if len(np.unique(atcg_replace_info.data)) == 2:
                 snp_cpg_dict = dict()
+                cpg_snp_matrix_col = self.cpg_snp_matrix.getcol(i)
                 for snp_code in atcg_replace_info.data:
                     # if position in cpg_pos_list: # 如果即是cpg位点也是snp位点，该位点的cpg信息忽略
-                    cpg_info_index = self.cpg_snp_matrix.getcol(i).multiply(self.cpg_snp_matrix.getcol(i) == snp_code).nonzero()[0]
-                    cpg_info = cpg_info_matrix.todense()[cpg_info_index]
+                    cpg_info_index = cpg_snp_matrix_col.multiply(cpg_snp_matrix_col == snp_code).nonzero()[0]
+                    cpg_info = cpg_info_matrix[cpg_info_index]
                     if not np.all(cpg_info == 0):
-                        snp_cpg_dict[snp_code] = cpg_info
+                        snp_cpg_dict[snp_code] = np.array(cpg_info)
 
                 position = self.cpg_snp_position[i]
                 if len(snp_cpg_dict) == 2:
                     pos_snp_cpg_dict[position] = snp_cpg_dict
-        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + " 4!")
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + " 4!")
 
         output_file = OutputFile(os.path.join(self.outputDir, self.tag + ".txt"))
         head_base_list = ["chrom", "pos", "refer", "real", "nReads", "mBase", "cBase", "tBase", "K4plus", "nDR", "nMR"]
@@ -98,7 +102,7 @@ class SummaryBySNP:
                 line_str = self.calculate_by_site(pos, snp_code, cpg_info, metrics_list)
                 output_file.write_line(line_str)
 
-        # print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S') + " 5!")
+        print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + " 5!")
 
     def calculate_by_site(self, site_pos:str, snp_code:int, cpg_info: np.ndarray, metrics_list:list):
         chrom = self.region.chr
@@ -175,12 +179,130 @@ class SummaryBySNP:
 
         return line_str.rstrip() + '\n'
 
-    def calculate_all(self, ):
-        cpg_matrix = pd.read_csv(self.cpg_path, sep='\t', header=None).iloc[:, :2]
+    def separate_rle_string(self, rle_string: str):
+        rle_list = []
+        for key, group in itertools.groupby(rle_string, str.isdigit):
+            value = "".join(group)
+            if value.isdigit():
+                rle_list.append(value)
+            else:
+                for char in value:
+                    rle_list.append(char)
+        return rle_list
 
+    def calculate_all(self, ):
+        head_base_list = ["chrom", "pos", "refer", "real", "nReads", "mBase", "cBase", "tBase", "K4plus", "nDR", "nMR"]
+        metrics_list = self.metrics.split(" ")
+        column_list = head_base_list + metrics_list
+        raw_data = pd.DataFrame(columns=column_list)
+
+        for read in tqdm(gzip.open(self.epibedFile.epibed_path, 'rb'), "Read EpiRead"):
+            line = read.decode().split('\t')
+            start_pos = int(line[1]) + 1  # 0-base to 1-base
+            read_strand = line[5]
+            if self.strand != 'both':
+                if self.strand != read_strand:
+                    continue
+
+            # get the snp number in this line
+            snp_num = 0
+            for s in line[8]:
+                if s in SNP_REPLACE_ATCG_DICT.keys(): # 先考虑ATCG replacement
+                    snp_num += 1
+            if snp_num == 0:
+                continue
+
+            if int(line[1]) > 10000000:
+                break;
+
+            cpg_info = self.separate_rle_string(line[6])
+            snp_info = self.separate_rle_string(line[8])
+
+            # get the snp position and label list
+            snp_pos_list = []
+            snp_label_list = []
+            snp_move_length = 0
+            snp_insert_length = 0
+            for i in range(len(snp_info)):
+                if snp_info[i].isalpha():
+                    if snp_info[i] in SNP_REPLACE_ATCG_DICT.keys():
+                        position = start_pos + snp_move_length - snp_insert_length
+                        snp_pos_list.append(position)
+                        snp_label_list.append(snp_info[i])
+
+                    if snp_info[i] in SNP_INSERT_DICT.keys():
+                        snp_insert_length += 1
+
+                    if i + 1 < len(snp_info) and snp_info[i + 1].isdigit():
+                        snp_move_length += int(snp_info[i + 1])
+                    else:
+                        snp_move_length += 1
+
+            # get the cpg position and label list
+            cpg_pos_list = []
+            cpg_label_list = []
+            cpg_move_length = 0
+            cpg_insert_length = 0
+            for i in range(len(cpg_info)):
+                if cpg_info[i].isalpha():
+                    if cpg_info[i] in CPG_DICT.keys():
+                        if read_strand == "+":  # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
+                            position = start_pos + cpg_move_length - cpg_insert_length
+                        else:  # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
+                            position = start_pos + cpg_move_length - cpg_insert_length - 1
+                        cpg_pos_list.append(position)
+                        cpg_label_list.append(cpg_info[i])
+
+                    if cpg_info[i] in SNP_INSERT_DICT.keys():
+                        cpg_insert_length += 1
+
+                    if i + 1 < len(cpg_info) and cpg_info[i + 1].isdigit():
+                        cpg_move_length += int(cpg_info[i + 1])
+                    else:
+                        cpg_move_length += 1
+
+            for i in range(len(snp_pos_list)):
+                snp_pos = snp_pos_list[i]
+                chrom = line[0]
+                pos = snp_pos
+                real = snp_label_list[i]
+                refer = self.fastaFile.query_by_region(chrom, snp_pos, snp_pos + 1).upper()
+
+                nReads = 1  # 总read个数
+                mBase = cpg_label_list.count(CODE.METHYLATED.label)  # 甲基化位点个数
+                tBase = len(cpg_label_list)  # 总位点个数
+                cBase = 0  # 存在甲基化的read中的未甲基化位点个数
+                K4plus = 0  # 长度大于等于K个位点的read个数
+                nDR = 0  # 长度大于等于K个位点且同时含有甲基化和未甲基化位点的read个数
+                nMR = 0  # 长度大于等于K个位点且含有甲基化位点的read个数
+                if mBase > 0:
+                    cBase = cpg_label_list.count(CODE.UNMETHYLATED.label)
+                if tBase > self.K:
+                    K4plus = 1
+                    if mBase > 0:
+                        nDR = 1
+                        if cBase > 0:
+                            nDR = 1
+
+                data_index = chrom + str(pos) + real + refer
+                try: # try success mean data_index exist
+                    raw_data.loc[data_index, 'nReads'] += nReads
+                    raw_data.loc[data_index, 'mBase'] += mBase
+                    raw_data.loc[data_index, 'tBase'] += tBase
+                    raw_data.loc[data_index, 'cBase'] += cBase
+                    raw_data.loc[data_index, 'K4plus'] += K4plus
+                    raw_data.loc[data_index, 'nDR'] += nDR
+                    raw_data.loc[data_index, 'nMR'] += nMR
+                except:
+                    new_data = {'chrom': chrom, 'pos': pos, 'real': real, 'refer': refer, 'nReads': nReads, 'mBase': mBase,
+                                'tBase': tBase, 'cBase': cBase, 'K4plus': K4plus, 'nDR': nDR, 'nMR': nMR}
+                    raw_data.loc[data_index] = new_data
+
+        output_file = os.path.join(self.outputDir, self.tag + ".txt")
+        raw_data.to_csv(output_file, index=False, header=True, sep='\t')
 
 def main(args):
-    print("Run summaryBySNP start!")
+    print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + "Run summaryBySNP start!")
     summaryBySNP = SummaryBySNP(args)
     summaryBySNP.check_args()
 
@@ -194,15 +316,14 @@ def main(args):
     else:
         summaryBySNP.calculate_all()
 
-    print("Run summaryBySNP end!")
+    print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f') + "Run summaryBySNP end!")
 
 if __name__ == '__main__':
     args = Namespace()
-    args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRX1631736.epibed.gz"
-    args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRX1631736.epibed.gz"
+    args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRR1045636.epibed.gz"
     args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
     args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    args.region = "chr1:923100-10924200"
+    # args.region = "chr1:10455-12640322"
     # args.bedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/bed_file/test.bed"
     args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
     args.tag = "summaryBySNP.test"
@@ -214,6 +335,6 @@ if __name__ == '__main__':
     args.cutReads = True
     args.strand = "both"
     args.k4Plus = 4
-    args.cpgCov = 1
-    args.r2Cov = 1
+    args.cpgCov = 10
+    args.r2Cov = 10
     main(args)

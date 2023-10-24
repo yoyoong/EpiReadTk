@@ -44,7 +44,7 @@ class EpibedFile:
                     rle_list.append(char)
         return rle_list
 
-    def get_cpg_snp_position(self):
+    def get_cpg_snp_position(self, strand="both"):
         '''Get the genome position of CpG and SNP site.
 
         Return:
@@ -54,7 +54,10 @@ class EpibedFile:
         for read in self.epibed_info.values():
             for line in read:
                 start_pos = int(line[1])
-                strand = line[5]
+                read_strand = line[5]
+                if strand != 'both':
+                    if strand != read_strand:
+                        continue
                 cpg_info = self.separate_rle_string(line[6])
                 snp_info = self.separate_rle_string(line[8])
 
@@ -63,7 +66,7 @@ class EpibedFile:
                 for i in range(len(cpg_info)):
                     if cpg_info[i].isalpha():
                         if cpg_info[i] in CPG_DICT.keys():
-                            if strand == "+": # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
+                            if read_strand == "+": # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
                                 self.cpg_snp_position.add(start_pos + move_length - insert_length)
                             else: # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
                                 self.cpg_snp_position.add(start_pos + move_length - insert_length - 1)
@@ -97,7 +100,7 @@ class EpibedFile:
         self.cpg_snp_position = list(sorted(self.cpg_snp_position))
         return self.cpg_snp_position
 
-    def build_cpg_snp_matrix(self):
+    def build_cpg_snp_matrix(self, strand="both"):
         '''Build a matrix include both CpG and SNP information.
 
         Return:
@@ -121,7 +124,10 @@ class EpibedFile:
         for read in self.epibed_info.values():
             for line in read:
                 start_pos = int(line[1])
-                strand = line[5]
+                read_strand = line[5]
+                if strand != 'both':
+                    if strand != read_strand:
+                        continue
                 cpg_info = self.separate_rle_string(line[6])
                 snp_info = self.separate_rle_string(line[8])
 
@@ -130,7 +136,7 @@ class EpibedFile:
                 for i in range(len(cpg_info)):
                     if cpg_info[i].isalpha():
                         if cpg_info[i] in CPG_DICT.keys():
-                            if strand == "+":  # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
+                            if read_strand == "+":  # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
                                 position = start_pos + move_length - insert_length
                             else:  # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
                                 position = start_pos + move_length - insert_length - 1
@@ -165,7 +171,7 @@ class EpibedFile:
 
         return self.cpg_snp_matrix, self.strand_list
 
-    def build_sparse_cpg_snp_matrix(self):
+    def build_sparse_cpg_snp_matrix(self, strand="both"):
         '''Build a matrix include both CpG and SNP information.
 
         Return:
@@ -182,7 +188,6 @@ class EpibedFile:
         '''
         pos_num = len(self.cpg_snp_position)
         read_num = len(self.epibed_info)
-        self.strand_list = []
 
         matrix_rows = []
         matrix_cols = []
@@ -192,7 +197,10 @@ class EpibedFile:
         for read in tqdm(self.epibed_info.values(), desc="Parse epiread"):
             for line in read:
                 start_pos = int(line[1])
-                strand = line[5]
+                read_strand = line[5]
+                if strand != 'both':
+                    if strand != read_strand:
+                        continue
                 cpg_info = self.separate_rle_string(line[6])
                 snp_info = self.separate_rle_string(line[8])
 
@@ -201,7 +209,7 @@ class EpibedFile:
                 for i in range(len(cpg_info)):
                     if cpg_info[i].isalpha():
                         if cpg_info[i] in CPG_DICT.keys():
-                            if strand == "+":  # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
+                            if read_strand == "+":  # reads from OT/CTOT(+) strands, methylation site is in C→T substitution
                                 position = start_pos + move_length - insert_length
                             else:  # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
                                 position = start_pos + move_length - insert_length - 1
@@ -235,8 +243,7 @@ class EpibedFile:
                             move_length += int(snp_info[i + 1])
                         else:
                             move_length += 1
-            self.strand_list.append(strand)
             row += 1
 
         self.sparse_cpg_snp_matrix = coo_matrix((matrix_values, (matrix_rows, matrix_cols)), shape=(read_num, pos_num))
-        return self.sparse_cpg_snp_matrix, self.strand_list
+        return self.sparse_cpg_snp_matrix
