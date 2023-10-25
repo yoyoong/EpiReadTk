@@ -1,5 +1,7 @@
 import tabix
 from common import Region
+from tqdm.autonotebook import tqdm
+import gzip
 
 class CpGFile:
     def __init__(self, cpgPath: str, shift = 0):
@@ -14,4 +16,14 @@ class CpGFile:
             if len(item) < 3:
                 continue
             cpg_pos_list.append(int(item[1]))
+        return cpg_pos_list
+
+    def query_all(self):
+        cpg_pos_list = []
+        for line in tqdm(gzip.open(self.cpg_path, 'rb'), "Read CpGFile"):
+            item = line.decode().split('\t')
+            if len(item) < 3:
+                continue
+            cpg_pos_list.append(int(item[1]))
+
         return cpg_pos_list

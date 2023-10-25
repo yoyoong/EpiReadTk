@@ -16,13 +16,12 @@ import datetime
 import gzip
 from tqdm.autonotebook import tqdm
 import itertools
-
-SHIFT = 500
+import sys
 
 class SummaryBySNP:
     def __init__(self, args):
         self.epibedFile = EpibedFile(args.epibedPath)
-        self.cpgFile = CpGFile(args.cpgPath, SHIFT)
+        self.cpgFile = CpGFile(args.cpgPath)
         self.fastaFile = FastaFile(args.fastaPath)
         self.region = Region(args.region) if args.__contains__("region") else None
         self.bedFile = BedFile(args.bedPath, 0) if args.__contains__("bedPath") else None
@@ -122,7 +121,7 @@ class SummaryBySNP:
             tBase += np.count_nonzero(read != 0)
             if CODE.METHYLATED.value in read:
                 cBase += np.count_nonzero(read == CODE.UNMETHYLATED.value)
-            if np.count_nonzero(read != 0) > self.K:
+            if np.count_nonzero(read != 0) >= self.K:
                 K4plus += 1
                 if CODE.METHYLATED.value in read:
                     nMR += 1
@@ -190,9 +189,21 @@ class SummaryBySNP:
                     rle_list.append(char)
         return rle_list
 
-    def calculate_all(self, ):
+    def calculate_all(self):
         head_base_list = ["chrom", "pos", "refer", "real", "nReads", "mBase", "cBase", "tBase", "K4plus", "nDR", "nMR"]
         metrics_list = self.metrics.split(" ")
+        if "MHL" in metrics_list:
+            for i in range(self.minK - 1, self.maxK):
+                head_base_list.append(f'methKmers{i}')
+                head_base_list.append(f'totalKmers{i}')
+        if "MBS" in metrics_list:
+            head_base_list.append('mbsNum')
+        if "Entropy" in metrics_list:
+            for i in range(args.K):
+                for j in range(args.K):
+                    head_base_list.append(f'kmer{i}_{j}')
+            head_base_list.append('kmerAll')
+
         column_list = head_base_list + metrics_list
         raw_data = pd.DataFrame(columns=column_list)
 
@@ -212,7 +223,9 @@ class SummaryBySNP:
             if snp_num == 0:
                 continue
 
-            if int(line[1]) > 10000000:
+            if int(line[1]) < 882400:
+                continue
+            if int(line[1]) > 1000000:
                 break;
 
             cpg_info = self.separate_rle_string(line[6])
@@ -225,22 +238,31 @@ class SummaryBySNP:
             snp_insert_length = 0
             for i in range(len(snp_info)):
                 if snp_info[i].isalpha():
-                    if snp_info[i] in SNP_REPLACE_ATCG_DICT.keys():
-                        position = start_pos + snp_move_length - snp_insert_length
-                        snp_pos_list.append(position)
-                        snp_label_list.append(snp_info[i])
-
-                    if snp_info[i] in SNP_INSERT_DICT.keys():
-                        snp_insert_length += 1
-
-                    if i + 1 < len(snp_info) and snp_info[i + 1].isdigit():
-                        snp_move_length += int(snp_info[i + 1])
+                    if snp_info[i] in SNP_DICT.keys():
+                        if i + 1 < len(snp_info) and snp_info[i + 1].isdigit():
+                            for s in range(int(snp_info[i + 1])):
+                                position = start_pos + snp_move_length - snp_insert_length + s
+                                snp_pos_list.append(position)
+                                snp_label_list.append(snp_info[i])
+                            snp_move_length += int(snp_info[i + 1])
+                            if snp_info[i] in SNP_INSERT_DICT.keys():
+                                snp_insert_length += int(snp_info[i + 1])
+                        else:
+                            position = start_pos + snp_move_length - snp_insert_length
+                            snp_pos_list.append(position)
+                            snp_label_list.append(snp_info[i])
+                            snp_move_length += 1
+                            if snp_info[i] in SNP_INSERT_DICT.keys():
+                                snp_insert_length += 1
                     else:
-                        snp_move_length += 1
+                        if i + 1 < len(snp_info) and snp_info[i + 1].isdigit():
+                            snp_move_length += int(snp_info[i + 1])
+                        else:
+                            snp_move_length += 1
 
             # get the cpg position and label list
             cpg_pos_list = []
-            cpg_label_list = []
+            cpg_raw_label_list = []
             cpg_move_length = 0
             cpg_insert_length = 0
             for i in range(len(cpg_info)):
@@ -250,16 +272,32 @@ class SummaryBySNP:
                             position = start_pos + cpg_move_length - cpg_insert_length
                         else:  # reads from OB/CTOB (-) strands, methylation site is in G→A substitution
                             position = start_pos + cpg_move_length - cpg_insert_length - 1
-                        cpg_pos_list.append(position)
-                        cpg_label_list.append(cpg_info[i])
-
-                    if cpg_info[i] in SNP_INSERT_DICT.keys():
-                        cpg_insert_length += 1
+                        if position not in snp_pos_list:  # 在cpg位点上的snp不考虑
+                            cpg_pos_list.append(position)
+                            cpg_raw_label_list.append(cpg_info[i])
 
                     if i + 1 < len(cpg_info) and cpg_info[i + 1].isdigit():
                         cpg_move_length += int(cpg_info[i + 1])
+                        if cpg_info[i] in SNP_INSERT_DICT.keys():
+                            cpg_insert_length += int(cpg_info[i + 1])
                     else:
                         cpg_move_length += 1
+                        if cpg_info[i] in SNP_INSERT_DICT.keys():
+                            cpg_insert_length += 1
+            if len(cpg_raw_label_list) < 1:
+                continue
+
+            # get the cpg label string, '1'-methylated, '0'-unmethylated, '-' is not cover
+            region = Region.init(line[0], cpg_pos_list[0], cpg_pos_list[-1] + 1)
+            cpg_full_pos_list = self.cpgFile.query_by_region(region)
+            cpg_label_list = ["-"] * len(cpg_full_pos_list)
+            for i in range(len(cpg_pos_list)):
+                index = cpg_full_pos_list.index(cpg_pos_list[i])
+                if cpg_raw_label_list[i] == CODE.METHYLATED.label:
+                    cpg_label_list[index] = "1"
+                elif cpg_raw_label_list[i] == CODE.UNMETHYLATED.label:
+                    cpg_label_list[index] = "0"
+            cpg_label_str = ''.join(cpg_label_list)
 
             for i in range(len(snp_pos_list)):
                 snp_pos = snp_pos_list[i]
@@ -267,22 +305,57 @@ class SummaryBySNP:
                 pos = snp_pos
                 real = snp_label_list[i]
                 refer = self.fastaFile.query_by_region(chrom, snp_pos, snp_pos + 1).upper()
-
                 nReads = 1  # 总read个数
-                mBase = cpg_label_list.count(CODE.METHYLATED.label)  # 甲基化位点个数
-                tBase = len(cpg_label_list)  # 总位点个数
+                mBase = cpg_label_list.count('1')  # 甲基化位点个数
+                tBase = len(cpg_raw_label_list) # 总位点个数
                 cBase = 0  # 存在甲基化的read中的未甲基化位点个数
                 K4plus = 0  # 长度大于等于K个位点的read个数
                 nDR = 0  # 长度大于等于K个位点且同时含有甲基化和未甲基化位点的read个数
                 nMR = 0  # 长度大于等于K个位点且含有甲基化位点的read个数
                 if mBase > 0:
-                    cBase = cpg_label_list.count(CODE.UNMETHYLATED.label)
-                if tBase > self.K:
+                    cBase = cpg_label_list.count('0')
+                if tBase >= self.K:
                     K4plus = 1
                     if mBase > 0:
-                        nDR = 1
+                        nMR = 1
                         if cBase > 0:
                             nDR = 1
+
+                methKmers_list = [0] * (self.maxK - self.minK + 1)
+                totalKmers_list = [0] * (self.maxK - self.minK + 1)
+                if "MHL" in metrics_list:
+                    if self.minK > len(cpg_label_list):
+                        print("Warning: minK is too large for calculate MHL.")
+                    maxK = min(self.maxK, len(cpg_label_list))
+                    if (self.minK > maxK):
+                        print("Error: maxK is too large.\n")
+                        sys.exit(-1)
+                    for i in range(self.minK - 1, maxK):
+                        for j in range(len(cpg_label_list) - i):
+                            cpg_label_concat = cpg_label_str[j:(j + i + 1)]
+                            if '-' not in cpg_label_concat:
+                                cpg_full_meth = '1' * (i + 1)
+                                if cpg_label_concat == cpg_full_meth:
+                                    methKmers_list[i] += 1
+                                totalKmers_list[i] += 1
+
+                mbsNum = 0.0
+                if "MBS" in metrics_list:
+                    if len(cpg_label_list) >= self.K:
+                        cpg_label_split_null = cpg_label_str.split('-')
+                        for item in cpg_label_split_null:
+                            cpg_label_split = list(filter(None, item.split('0')))
+                            mbsNum = sum([len(x) ** 2 for x in cpg_label_split]) / len(cpg_label_list) ** 2
+
+                kmer_list = [0] * (self.K * self.K) # every kmer pattern number
+                kmerAll = 0
+                if "Entropy" in metrics_list:
+                    if len(cpg_label_list) >= self.K:
+                        for i in range(len(cpg_label_str) - self.K + 1):
+                            kmer = cpg_label_str[i: i + self.K]
+                            if '-' not in kmer:
+                                kmer_list[int(kmer, 2)] += 1
+                                kmerAll += 1
 
                 data_index = chrom + str(pos) + real + refer
                 try: # try success mean data_index exist
@@ -293,12 +366,41 @@ class SummaryBySNP:
                     raw_data.loc[data_index, 'K4plus'] += K4plus
                     raw_data.loc[data_index, 'nDR'] += nDR
                     raw_data.loc[data_index, 'nMR'] += nMR
+                    if "MHL" in metrics_list:
+                        for i in range(self.minK - 1, self.maxK):
+                            raw_data.loc[data_index, f'methKmers{i}'] += methKmers_list[i]
+                            raw_data.loc[data_index, f'totalKmers{i}'] += totalKmers_list[i]
+
+                    if "MBS" in metrics_list:
+                        raw_data.loc[data_index, 'mbsNum'] += mbsNum
+
+                    if "Entropy" in metrics_list:
+                        raw_data.loc[data_index, 'kmerAll'] += kmerAll
+                        for i in range(self.K):
+                            for j in range(self.K):
+                                index = (i) * self.K + j
+                                raw_data.loc[data_index, f'kmer{i}_{j}'] += kmer_list[index]
                 except:
                     new_data = {'chrom': chrom, 'pos': pos, 'real': real, 'refer': refer, 'nReads': nReads, 'mBase': mBase,
                                 'tBase': tBase, 'cBase': cBase, 'K4plus': K4plus, 'nDR': nDR, 'nMR': nMR}
+                    if "MHL" in metrics_list:
+                        for i in range(self.minK - 1, self.maxK):
+                            new_data[f'methKmers{i}'] = methKmers_list[i]
+                            new_data[f'totalKmers{i}'] = totalKmers_list[i]
+
+                    if "MBS" in metrics_list:
+                        new_data['mbsNum'] = mbsNum
+
+                    if "Entropy" in metrics_list:
+                        for i in range(self.K):
+                            for j in range(self.K):
+                                index = (i) * self.K + j
+                                new_data[f'kmer{i}_{j}'] = kmer_list[index]
+                                new_data['kmerAll'] = kmerAll
+
                     raw_data.loc[data_index] = new_data
 
-        output_file = os.path.join(self.outputDir, self.tag + ".txt")
+        output_file = os.path.join(self.outputDir, self.tag + ".csv")
         raw_data.to_csv(output_file, index=False, header=True, sep='\t')
 
 def main(args):
@@ -331,10 +433,10 @@ if __name__ == '__main__':
     # args.metrics = "Entropy"
     args.minK = 1
     args.maxK = 10
-    args.K = 4
+    args.K = 2
     args.cutReads = True
     args.strand = "both"
-    args.k4Plus = 4
+    args.k4Plus = 2
     args.cpgCov = 10
     args.r2Cov = 10
     main(args)

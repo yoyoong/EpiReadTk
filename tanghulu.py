@@ -10,8 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-SHIFT = 500
-
+SHIFT = 200
 class Tanghulu:
     def __init__(self, args):
         self.epibedFile = EpibedFile(args.epibedPath)
@@ -29,12 +28,13 @@ class Tanghulu:
 
     def build_epibed_matrix(self):
         self.epibed_info = self.epibedFile.query_by_region(self.region)
-        self.cpg_snp_position = self.epibedFile.get_cpg_snp_position()
+        cpg_pos_list = self.cpgFile.query_by_region(self.region)
+        self.cpg_snp_position = self.epibedFile.get_cpg_snp_position(cpg_pos_list)
         self.cpg_snp_matrix, self.strand_list = self.epibedFile.build_cpg_snp_matrix()
 
     def paint_tanghulu_plot(self):
-        ref_pos = self.cpg_snp_position
         cpg_pos_list = self.cpgFile.query_by_region(self.region)
+        ref_pos = self.cpg_snp_position
         draw_pos = np.arange(len(ref_pos))
         pos_num = len(ref_pos)
         read_num = len(self.epibed_info)
@@ -88,7 +88,7 @@ class Tanghulu:
 
                 # draw cpg information
                 if status in CPG_DICT.values():
-                    ax.scatter([draw_pos[j]], [y_pos], c='white', edgecolors=color, s=100, zorder=2)
+                    ax.scatter([draw_pos[j]], [y_pos], c='white', edgecolors=color, s=100, zorder=3)
                     if status == CODE.METHYLATED.value:
                         ax.scatter([draw_pos[j]], [y_pos], c=color, edgecolors=color, s=100, zorder=3)
 
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRR1045636.epibed.gz"
     args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
     args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    args.region = "chr1:719206-727080"
+    args.region = "chr1:882508-883414"
     args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
     args.tag = "tanghulu.test"
     args.outFormat = "png"

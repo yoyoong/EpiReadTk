@@ -5,6 +5,11 @@ class Region:
         self.start = int(region.split(':')[1].split('-')[0])
         self.end = int(region.split(':')[1].split('-')[1])
 
+    @classmethod
+    def init(self, chrom: str, start: int, end: int):
+        region_str = chrom + ":" + str(start) + "-" + str(end)
+        return self(region_str)
+
     @property
     def len(self) -> int:
         return self.end - self.start
