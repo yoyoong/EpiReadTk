@@ -27,7 +27,7 @@ class Tanghulu:
         # assert self.outcut > self.region.len, f"The region is larger than {args.outcut}"
 
     def build_epibed_matrix(self):
-        self.epibed_info = self.epibedFile.query_by_region(self.region)
+        self.epibed_info = self.epibedFile.query_by_region_and_grouped(self.region)
         cpg_pos_list = self.cpgFile.query_by_region(self.region)
         self.cpg_snp_position = self.epibedFile.get_cpg_snp_position(cpg_pos_list)
         self.cpg_snp_matrix, self.strand_list = self.epibedFile.build_cpg_snp_matrix()
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRR1045636.epibed.gz"
     args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
     args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    args.region = "chr1:882508-883414"
+    args.region = "chr1:10001500-10001937"
     args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
     args.tag = "tanghulu.test"
     args.outFormat = "png"
