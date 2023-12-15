@@ -45,7 +45,7 @@ class SummaryBySNP:
         assert 1 <= self.minK <= 10, 'minK should be in 1 to 10'
         assert 1 <= self.maxK <= 10, 'maxK should be in 1 to 10'
         assert self.maxK > self.minK, 'maxK should be larger than minK'
-        # assert 3 <= self.K <= 5, 'K：the default is 4 and values must be between 3 and 5'
+        # assert 3 <= self.K <= 5, 'K: the default is 4 and values must be between 3 and 5'
         # assert self.region or self.bedFile, 'you should input bedPath or region'
         assert (not self.region) or (not self.bedFile), 'you should only input bedPath or region'
         assert self.strand == 'both' or self.strand == 'plus' or self.strand == 'minus', 'strand should be both, plus or minus'
@@ -155,7 +155,11 @@ class SummaryBySNP:
 
         # get the cpg label string, '1'-methylated, '0'-unmethylated, '-' is not cover
         region = Region.init(info[0], cpg_pos_list[0], cpg_pos_list[-1] + 1)
-        cpg_full_pos_list = self.cpgFile.query_by_region(region)
+        try:
+            cpg_full_pos_list = self.cpgFile.query_by_region(region)
+        except:
+            print(f"{region.format_string} are not exist in cpg reference file, continue...")
+            return
         cpg_label_list = ["-"] * len(cpg_full_pos_list)
         for i in range(len(cpg_pos_list)):
             index = cpg_full_pos_list.index(cpg_pos_list[i])
@@ -167,8 +171,6 @@ class SummaryBySNP:
 
         for i in range(len(snp_pos_list)):
             snp_pos = snp_pos_list[i]
-            if snp_pos == 10001937:
-                print(55)
             chrom = info[0]
             pos = snp_pos
             real = snp_label_list[i]
@@ -250,7 +252,8 @@ class SummaryBySNP:
                             raw_data.loc[data_index, f'kmer{i}_{j}'] += kmer_list[index]
             except:
                 new_data = {'chrom': chrom, 'pos': pos, 'real': real, 'refer': refer, 'nReads': nReads,
-                            'mBase': mBase, 'tBase': tBase, 'cBase': cBase, 'K4plus': K4plus, 'nDR': nDR, 'nMR': nMR}
+                            'mBase': mBase, 'tBase': tBase, 'cBase': cBase, 'K4plus': K4plus, 'nDR': nDR,
+                            'nMR': nMR}
                 if "MHL" in self.metrics_list:
                     for i in range(self.minK - 1, self.maxK):
                         new_data[f'methKmers{i}'] = methKmers_list[i]
@@ -297,9 +300,9 @@ class SummaryBySNP:
                 raw_data = pd.DataFrame(columns=column_list)
 
             info = line.decode().split('\t')
-            if info[0] != 'chr1':
-                self.write_to_file(raw_data)
-                break
+            # if info[0] != 'chr1':
+            #     self.write_to_file(raw_data)
+            #     break
             self.process_line(info, raw_data)
 
         raw_data_all = pd.concat([raw_data_all, raw_data]).groupby(level=0).agg(agg_dict)
@@ -407,17 +410,17 @@ if __name__ == '__main__':
     args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
     args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
     # args.region = "chr1:10455-12640322"
-    args.bedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/bed_file/test.bed"
+    # args.bedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/bed_file/test.bed"
     args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
     args.tag = "summaryBySNP.test"
     args.metrics = "MM PDR CHALM MHL MCR MBS Entropy"
     # args.metrics = "Entropy"
     args.minK = 1
     args.maxK = 10
-    args.K = 2
+    args.K = 4
     args.cutReads = True
     args.strand = "both"
-    args.k4Plus = 2
+    args.k4Plus = 5
     args.cpgCov = 10
     args.r2Cov = 10
     main(args)

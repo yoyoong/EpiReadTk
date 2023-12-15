@@ -22,6 +22,8 @@ class HelpMessage():
     k4Plus = "minimal number of reads that cover 4 or more CpGs for PDR, CHALM, MHL, MBS and Entropy [5]"
     cpgCov = "minimal number of CpG coverage for MM and MCR calculation [5]"
     r2Cov = "minimal number of reads that cover two CpGs for R2 calculation [20]"
+    vcf_path = "Reference vcf file\'s path, .gz format"
+    snp_id = "SNP id file\'s path, .txt format"
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
