@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import gzip
 import itertools
@@ -9,6 +10,7 @@ from pathlib import Path
 import pandas as pd
 from tqdm.autonotebook import tqdm
 
+from main import HelpMessage
 from common.BedFile import BedFile
 from common.Constant import CODE, CPG_DICT, SNP_INSERT_DICT, SNP_REPLACE_ATCG_DICT
 from common.CpGFile import CpGFile
@@ -23,8 +25,8 @@ class SummaryBySNP:
         self.epibedFile = EpibedFile(args.epibedPath)
         self.cpgFile = CpGFile(args.cpgPath)
         self.fastaFile = FastaFile(args.fastaPath)
-        self.region = Region(args.region) if args.__contains__("region") else None
-        self.bedFile = BedFile(args.bedPath, 0) if args.__contains__("bedPath") else None
+        self.region = Region(args.region) if args.region is not None else None
+        self.bedFile = BedFile(args.bedPath, 0) if args.bedPath is not None else None
         self.outputDir = args.outputDir
         self.tag = args.tag
         self.metrics_list = args.metrics.split(" ")
@@ -76,7 +78,7 @@ class SummaryBySNP:
                     rle_list.append(char)
         return rle_list
 
-    def process_line(self, info:str, raw_data:pd.DataFrame):
+    def process_line(self, info:list, raw_data:pd.DataFrame):
         if len(info) < 9:
             return
         start_pos = int(info[1]) + 1  # 0-base to 1-base
@@ -154,7 +156,8 @@ class SummaryBySNP:
             return
 
         # get the cpg label string, '1'-methylated, '0'-unmethylated, '-' is not cover
-        region = Region.init(info[0], cpg_pos_list[0], cpg_pos_list[-1] + 1)
+        chrom = f"chr{info[0]}" if not str(info[0]).startswith("chr") else str(info[0])
+        region = Region.init(chrom, cpg_pos_list[0], cpg_pos_list[-1] + 1)
         try:
             cpg_full_pos_list = self.cpgFile.query_by_region(region)
         except:
@@ -171,10 +174,9 @@ class SummaryBySNP:
 
         for i in range(len(snp_pos_list)):
             snp_pos = snp_pos_list[i]
-            chrom = info[0]
             pos = snp_pos
             real = snp_label_list[i]
-            refer = self.fastaFile.query_by_region(chrom, snp_pos, snp_pos + 1).upper()
+            refer = self.fastaFile.query_by_region(info[0], snp_pos, snp_pos + 1).upper()
             nReads = 1  # 总read个数
             mBase = cpg_label_list.count('1')  # 甲基化位点个数
             tBase = len(cpg_raw_label_list)  # 总位点个数
@@ -286,32 +288,36 @@ class SummaryBySNP:
         raw_data = pd.DataFrame(columns=column_list)
 
         count = 0
-        raw_data_all = pd.DataFrame(columns=column_list)
         agg_dict = {} # 合并raw_data时每一列的处理规则
         for column in raw_data.columns:
             if column in ["chrom", "pos", "refer", "real"]:
                 agg_dict[column] = 'first'
             else:
                 agg_dict[column] = 'sum'
+
+        first_flag = True
         for line in tqdm(gzip.open(self.epibedFile.epibed_path, 'rb'), "Read EpiRead"):
             count += 1
             if count % 100000 == 0: # 每10万行重置raw_data，避免raw_data过大
-                raw_data_all = pd.concat([raw_data_all, raw_data]).groupby(level=0).agg(agg_dict)
+                if first_flag:
+                    self.write_to_file(raw_data, mode="w")
+                    first_flag = False
+                else:
+                    self.write_to_file(raw_data, mode="a")
                 raw_data = pd.DataFrame(columns=column_list)
 
             info = line.decode().split('\t')
-            # if info[0] != 'chr1':
-            #     self.write_to_file(raw_data)
-            #     break
+            # if info[0] != '3':
+            #     continue
+            # else:
+            #     if info[1] < 90449414:
+            #         continue
             self.process_line(info, raw_data)
 
-        raw_data_all = pd.concat([raw_data_all, raw_data]).groupby(level=0).agg(agg_dict)
-        self.write_to_file(raw_data_all)
-
-    def write_to_file(self, raw_data: pd.DataFrame):
+    def write_to_file(self, raw_data: pd.DataFrame, mode: str = 'w') -> None:
         head_base_list = ["chrom", "pos", "refer", "real", "nReads", "mBase", "cBase", "tBase", "K4plus", "nDR", "nMR"]
         output_column_list = head_base_list + self.metrics_list
-        output_temp_file = os.path.join(self.outputDir, f"{self.tag}.csv")
+        output_filename = os.path.join(self.outputDir, f"{self.tag}.csv")
 
         # filter out only have one snp position
         raw_data['duplicated'] = raw_data.duplicated(['pos'], keep=False)
@@ -377,7 +383,12 @@ class SummaryBySNP:
                     Entropy = round(- 1 / self.K * temp, 4)
                     output_data.loc[index, "Entropy"] = Entropy
 
-        output_data.to_csv(output_temp_file, columns = output_column_list, index=False, header=True, sep='\t')
+        if output_data.shape[0] == 0:
+            return
+        if mode == 'w':
+            output_data.to_csv(output_filename, columns=output_column_list, index=False, header=True, sep='\t', mode=mode)
+        else:
+            output_data.to_csv(output_filename, columns=output_column_list, index=False, header=False, sep='\t', mode=mode)
 
 def main(args):
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f ') + "Run summaryBySNP start!")
@@ -386,41 +397,47 @@ def main(args):
 
     if summaryBySNP.region is not None:
         raw_data = summaryBySNP.summary_by_region(summaryBySNP.region)
-        summaryBySNP.write_to_file(raw_data)
+        summaryBySNP.write_to_file(raw_data, mode="w")
     elif summaryBySNP.bedFile is not None:
         region_list = summaryBySNP.bedFile.get_region_list()
-        column_list = summaryBySNP.get_columns_list()
-        raw_data_all = pd.DataFrame(columns=column_list)
-        agg_dict = {}  # 合并raw_data时每一列的处理规则
-        for column in raw_data_all.columns:
-            agg_dict[column] = 'first'
-
+        first_flag = True
         for region in tqdm(region_list, "Summary by region"):
             raw_data = summaryBySNP.summary_by_region(region)
-            raw_data_all = pd.concat([raw_data_all, raw_data]).groupby(level=0).agg(agg_dict)
-        summaryBySNP.write_to_file(raw_data_all)
+            if first_flag:
+                summaryBySNP.write_to_file(raw_data, mode="w")
+                first_flag = False
+            else:
+                summaryBySNP.write_to_file(raw_data, mode="a")
     else:
         summaryBySNP.calculate_all()
 
     print(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f ') + "Run summaryBySNP end!")
 
+
 if __name__ == '__main__':
-    args = Namespace()
-    args.epibedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/SRR1045636.epibed.gz"
-    args.cpgPath = "/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg19/hg19_CpG.gz"
-    args.fastaPath = "/sibcb2/bioinformatics/iGenome/Bismark/hg19/hg19.fa"
-    # args.region = "chr1:10455-12640322"
-    # args.bedPath = "/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/bed_file/test.bed"
-    args.outputDir = "/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir"
-    args.tag = "summaryBySNP.test"
-    args.metrics = "MM PDR CHALM MHL MCR MBS Entropy"
-    # args.metrics = "Entropy"
-    args.minK = 1
-    args.maxK = 10
-    args.K = 4
-    args.cutReads = True
-    args.strand = "both"
-    args.k4Plus = 5
-    args.cpgCov = 10
-    args.r2Cov = 10
+    parser = argparse.ArgumentParser(description='summaryBySNP')
+    help = HelpMessage()
+    parser.add_argument('--epibedPath', type=str, required=False, help=help.epibedPath,
+                        default="/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/6.epibed/Z000000PX.epibed.gz") # require
+    parser.add_argument('--cpgPath', type=str, required=False, help=help.cpgPath,
+                        default="/sibcb2/bioinformatics2/zhangzhiqiang/genome/CpG/hg38/hg38_CpG.gz") # require
+    parser.add_argument('--fastaPath', type=str, required=False, help=help.fastaPath,
+                        default="/sibcb2/bioinformatics2/hongyuyang/project/EpiReadTk/data/0.refer_fastq/hg38.fa") # require
+    parser.add_argument('--region', type=str, required=False, help=help.region)
+    parser.add_argument('--bedPath', type=str, required=False, help=help.bedPath)
+    parser.add_argument('--outputDir', type=str, required=False, help=help.outputDir,
+                        default="/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir") # require
+    parser.add_argument('--tag', type=str, required=False, help=help.tag, default="Z000000PX_18") # require
+    parser.add_argument('--metrics', type=str, required=False, help=help.metrics,
+                        default="MM PDR CHALM MHL MCR MBS Entropy")
+    parser.add_argument('--minK', type=int, required=False, help=help.minK, default='1')
+    parser.add_argument('--maxK', type=int, required=False, help=help.maxK, default='10')
+    parser.add_argument('--K', type=int, required=False, help=help.K, default='4')
+    parser.add_argument('--cutReads', required=False, action='store_true', help=help.cutReads)
+    parser.add_argument('--strand', type=str, required=False, help=help.strand, default='both')
+    parser.add_argument('--k4Plus', type=int, required=False, help=help.k4Plus, default='5')
+    parser.add_argument('--cpgCov', type=int, required=False, help=help.cpgCov, default='5')
+    parser.add_argument('--r2Cov', type=int, required=False, help=help.r2Cov, default='5')
+    args = parser.parse_args()
+
     main(args)

@@ -110,12 +110,13 @@ def main(args):
     plt.xlabel("MM")
     plt.ylabel("PDR")
     plt.figure(figsize=(10, 10))
+    tag = args.tag
     fig.savefig(tag + '.pdf')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script requires the following dependencies: numpy/pandas/scipy/matplotlib')
     parser.add_argument('--inputFile', type=str, required=False, help="inputdata metrics file, generate by summaryBySNP",
-                        default='/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir/summaryBySNP.test.csv')
+                        default='/sibcb2/bioinformatics2/hongyuyang/code/EpiReadTk/outputDir/Z000000PX.csv')
     parser.add_argument('--boxSize', type=float, required=False, help="Size of neighborhood, Default = 0.1 (nx(k) = ny(k) = 0.1*n)", default=0.1)
     parser.add_argument('--alpha', type=float, required=False, help="Significant level (eg. 0.001, 0.01, 0.05 ...), Default = 0.01", default=0.01)
     parser.add_argument('--tag', type=str, required=False, help="prefix of the output file(s)", default="test")
